@@ -1,4 +1,4 @@
-<!-- index.html -->
+<!-- index.html (fixed) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -171,19 +171,18 @@
         <h2 id="checkout-heading">Join the Fan Club</h2>
         <form id="orderForm" onsubmit="sendOrder(event)" aria-labelledby="checkout-heading">
           <div class="form-row">
-            <input id="name" name="name" placeholder="Full name" required>
-            <input id="email" name="email" placeholder="Email address" required>
+            <input id="name" name="name" placeholder="Full name" required aria-label="Full name">
+            <input id="email" name="email" placeholder="Email address" type="email" required aria-label="Email address">
           </div>
 
           <div class="form-row">
-            <input id="phone" name="phone" placeholder="Phone / WhatsApp (optional)">
-            <input id="selectedPlan" name="selectedPlan" placeholder="Selected plan" readonly>
+            <input id="phone" name="phone" placeholder="Phone / WhatsApp (optional)" type="tel" aria-label="Phone">
+            <input id="selectedPlan" name="selectedPlan" placeholder="Selected plan" readonly aria-readonly="true" aria-label="Selected plan">
           </div>
 
           <div class="send-method" role="radiogroup" aria-label="Send method">
-    
             <label style="display:flex;align-items:center;gap:.5rem">
-              <input type="radio" name="sendMethod" value="email">
+              <input type="radio" name="sendMethod" value="email" checked>
               <span class="muted"><i class="bi bi-envelope"></i> Email</span>
             </label>
           </div>
@@ -195,7 +194,7 @@
             <button type="button" class="btn btn-outline" onclick="copyOrder()">Copy Order</button>
           </div>
 
-          <p class="small-muted">Tip: For WhatsApp the link opens WhatsApp Web or the app (no recipient number included). For email, your default mail client will open.</p>
+          <p class="small-muted">Tip: For WhatsApp the link opens WhatsApp Web or the app (no recipient number included unless configured). For email, your default mail client will open.</p>
         </form>
       </div>
 
@@ -264,9 +263,11 @@
     const $ = (s) => document.querySelector(s);
     const $$ = (s) => document.querySelectorAll(s);
 
+    // configure your official contact details here
     const OFFICIAL_EMAIL = "anthonyqdasingerfanclubcontact@gmail.com";
-    const OFFICIAL_WHATSAPP = "...";
-
+    // If you want WhatsApp to open with a recipient number, set OFFICIAL_WHATSAPP to the international number without '+' or dashes, e.g. "15551234567"
+    // Leave as empty string or "..." to open the generic wa.me?text= link (no recipient).
+  
 
     // Loader hide
     window.addEventListener('load', () => {
@@ -281,9 +282,11 @@
 
     // select plan
     function selectPlan(btn){
-      const plan = btn.parentElement.parentElement.dataset.plan || '';
+      // walk up to .plan element to read dataset.plan - robust against inner structure
+      const planNode = btn.closest('.plan');
+      const plan = planNode?.dataset?.plan || '';
       document.getElementById('selectedPlan').value = plan;
-      document.getElementById('previewSelected').textContent = plan;
+      document.getElementById('previewSelected').textContent = plan || '— none —';
       document.getElementById('orderForm')?.scrollIntoView({behavior:'smooth'});
       // visual feedback
       const orig = btn.innerHTML;
@@ -293,46 +296,68 @@
 
     // build order
     function buildOrderText(){
-      const name = $('#name').value.trim();
-      const email = $('#email').value.trim();
-      const phone = $('#phone').value.trim();
-      const plan = $('#selectedPlan').value.trim() || '(no plan selected)';
-      const note = $('#message').value.trim();
-      let lines = [
+      const name = ($('#name')?.value || '').trim();
+      const email = ($('#email')?.value || '').trim();
+      const phone = ($('#phone')?.value || '').trim();
+      const plan = ($('#selectedPlan')?.value || '').trim() || '(no plan selected)';
+      const note = ($('#message')?.value || '').trim();
+
+      const lines = [
         'Fan Club Order',
         `Name: ${name || '(no name)'}`,
         `Email: ${email || '(no email)'}`,
       ];
       if (phone) lines.push(`Phone: ${phone}`);
       lines.push(`Plan: ${plan}`);
-      if (note) lines.push('', `Note: ${note}`);
+      if (note) {
+        lines.push('', `Note: ${note}`);
+      }
       lines.push('', 'Thanks for supporting Anthony Q!');
       return lines.join('\n');
     }
 
-    // send order
+    // send order (fixed)
     function sendOrder(e){
       e.preventDefault();
-      const name = $('#name').value.trim();
-      const email = $('#email').value.trim();
-      if (!name || !email){ alert('Please enter your name and email.'); return; }
 
-      const method = document.querySelector('input[name="sendMethod"]:checked')?.value || 'whatsapp';
-      const encoded = encodeURIComponent(message);
+      const name = ($('#name')?.value || '').trim();
+      const email = ($('#email')?.value || '').trim();
+      if (!name || !email){
+        alert('Please enter your name and email.');
+        return;
+      }
+
+      // Build the message text from form fields
+      const orderText = buildOrderText();
+      const encoded = encodeURIComponent(orderText);
+
+      // determine method (fallback to 'email' if no radio is checked)
+      const method = document.querySelector('input[name="sendMethod"]:checked')?.value || 'email';
 
       if (method === 'whatsapp'){
-        const waUrl = `https://wa.me/?text=${encoded}`;
+        // Use OFFICIAL_WHATSAPP if provided; otherwise open generic wa.me with text only
+        const waUrl = (OFFICIAL_WHATSAPP && OFFICIAL_WHATSAPP !== '...') 
+          ? `https://wa.me/${OFFICIAL_WHATSAPP}?text=${encoded}`
+          : `https://wa.me/?text=${encoded}`;
         window.open(waUrl, '_blank');
       } else {
+        // include recipient so the mail client composes to the official fan club address
         const subject = encodeURIComponent('Anthony Q — Fan Club Order');
-        window.location.href = `mailto:?subject=${subject}&body=${encoded}`;
+        // mailto length limits are client-dependent, but typical order text is fine.
+        const mailto = `mailto:${encodeURIComponent(OFFICIAL_EMAIL)}?subject=${subject}&body=${encoded}`;
+        // open default mail client
+        window.location.href = mailto;
       }
     }
 
     // Copy order
     async function copyOrder(){
-      try { await navigator.clipboard.writeText(buildOrderText()); alert('Order copied to clipboard.'); }
-      catch(e){ alert('Copy failed — please select and copy manually.'); }
+      try {
+        await navigator.clipboard.writeText(buildOrderText());
+        alert('Order copied to clipboard.');
+      } catch(e){
+        alert('Copy failed — please select and copy manually.');
+      }
     }
 
     // COMMENTS (prepopulated realistic list)
@@ -417,5 +442,3 @@
   </script>
 </body>
 </html>
-
-
